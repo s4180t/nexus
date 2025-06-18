@@ -1,0 +1,16 @@
+{
+  "name": "nexus",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@sap/adp-cli": "^1.1.70",
+    "@sap/ux-ui5-tooling": "^1.18.0",
+    "@ui5/cli": "^3.11.9"
+  }
+}
