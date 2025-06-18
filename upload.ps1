@@ -34,13 +34,23 @@ if (-not (Test-Path $ArchivesDir)) {
 
 # Pack and publish a single npm package tarball to Nexus
 function Publish-Package($PackageName) {
-    Write-Host "[Pack] Packing $PackageName..."
+    $RealPackage = $PackageName
+    # Handle npm alias (e.g., npm:@real/package@1.2.3)
+    if ($PackageName -match '^(.+?)\|(npm:.+)$') {
+        $Alias = $PackageName
+        if ($Alias -match '^npm:([^@]+)@(.+)$') {
+            $RealPackage = "$($Matches[1])@$($Matches[2])"
+        } elseif ($Alias -match '^npm:([^@]+)$') {
+            $RealPackage = $Matches[1]
+        }
+    }
+    Write-Host "[Pack] Packing $RealPackage..."
 
     # Pack the npm package and capture the tarball filename
-    $packOutput = npm pack $PackageName --loglevel=error
+    $packOutput = npm pack $RealPackage --loglevel=error
     $Tarball = $packOutput | Select-Object -First 1
     if (-not (Test-Path $Tarball)) {
-        Write-Warning "[Warning] Tarball $Tarball not found for $PackageName. Skipping."
+        Write-Warning "[Warning] Tarball $Tarball not found for $RealPackage. Skipping."
         $script:exitCode = 1
         return
     }
@@ -51,7 +61,7 @@ function Publish-Package($PackageName) {
     if ($DryRun) {
         # Simulate publishing the tarball (dry run)
         Write-Host "[Dry Run] Would publish $ArchiveTarball to $NexusRepoUrl"
-        Write-Host "[Debug] PackageName: $PackageName"
+        Write-Host "[Debug] PackageName: $RealPackage"
         Write-Host "[Debug] Tarball: $ArchiveTarball"
         Write-Host "[Debug] NexusRepoUrl: $NexusRepoUrl"
         Write-Host "[Debug] Command: npm publish $ArchiveTarball --registry $NexusRepoUrl --dry-run --loglevel=error"
@@ -64,11 +74,11 @@ function Publish-Package($PackageName) {
         $script:exitCode = $LASTEXITCODE
     }
     if ($script:exitCode -ne 0) {
-        Write-Error "[Error] npm publish failed for $PackageName. Stopping script."
+        Write-Error "[Error] npm publish failed for $RealPackage. Stopping script."
         exit $script:exitCode
     }
     else {
-        Write-Host "[Success] $PackageName published successfully!"
+        Write-Host "[Success] $RealPackage published successfully!"
     }
 }
 
