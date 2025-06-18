@@ -37,15 +37,6 @@ $script:Errors = @()
 # Pack and publish a single npm package tarball to Nexus
 function Publish-Package($PackageName) {
     $RealPackage = $PackageName
-    # Handle npm alias (e.g., npm:@real/package@1.2.3)
-    if ($PackageName -match '^(.+?)\|(npm:.+)$') {
-        $Alias = $PackageName
-        if ($Alias -match '^npm:([^@]+)@(.+)$') {
-            $RealPackage = "$($Matches[1])@$($Matches[2])"
-        } elseif ($Alias -match '^npm:([^@]+)$') {
-            $RealPackage = $Matches[1]
-        }
-    }
     Write-Host "[Pack] Packing $RealPackage..." -ForegroundColor Yellow
 
     # Pack the npm package and capture the tarball filename
