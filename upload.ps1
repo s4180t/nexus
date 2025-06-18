@@ -1,5 +1,6 @@
 param(
-    [switch]$DryRun
+    [switch]$DryRun,
+    [int]$StartFrom = 0
 )
 
 # Nexus npm repository URL
@@ -23,8 +24,8 @@ function Get-AllDependencies($Tree) {
     return $script:Packages | Select-Object -Unique
 }
 
-# Get a flat list of all dependencies (including transitive ones)
-$AllDependencies = Get-AllDependencies $DependencyTree
+# Get a flat list of all dependencies (including transitive ones), sorted alphabetically
+$AllDependencies = Get-AllDependencies $DependencyTree | Sort-Object
 
 # Ensure the 'archives' directory exists for storing all packed .tgz files
 $ArchivesDir = Join-Path $PSScriptRoot "archives"
@@ -32,6 +33,7 @@ if (-not (Test-Path $ArchivesDir)) {
     New-Item -ItemType Directory -Path $ArchivesDir | Out-Null
 }
 
+$script:Errors = @()
 # Pack and publish a single npm package tarball to Nexus
 function Publish-Package($PackageName) {
     $RealPackage = $PackageName
@@ -44,14 +46,15 @@ function Publish-Package($PackageName) {
             $RealPackage = $Matches[1]
         }
     }
-    Write-Host "[Pack] Packing $RealPackage..."
+    Write-Host "[Pack] Packing $RealPackage..." -ForegroundColor Yellow
 
     # Pack the npm package and capture the tarball filename
-    $packOutput = npm pack $RealPackage --loglevel=error
+    $packOutput = npm pack $RealPackage --loglevel=error 2>&1
     $Tarball = $packOutput | Select-Object -First 1
     if (-not (Test-Path $Tarball)) {
-        Write-Warning "[Warning] Tarball $Tarball not found for $RealPackage. Skipping."
-        $script:exitCode = 1
+        $msg = "[Warning] Tarball $Tarball not found for $RealPackage. Skipping. Output: $packOutput"
+        Write-Warning $msg
+        $script:Errors += $msg
         return
     }
     # Move the tarball to the 'archives' directory
@@ -60,40 +63,51 @@ function Publish-Package($PackageName) {
 
     if ($DryRun) {
         # Simulate publishing the tarball (dry run)
-        Write-Host "[Dry Run] Would publish $ArchiveTarball to $NexusRepoUrl"
-        Write-Host "[Debug] PackageName: $RealPackage"
-        Write-Host "[Debug] Tarball: $ArchiveTarball"
-        Write-Host "[Debug] NexusRepoUrl: $NexusRepoUrl"
-        Write-Host "[Debug] Command: npm publish $ArchiveTarball --registry $NexusRepoUrl --dry-run --loglevel=error"
-        npm publish $ArchiveTarball --registry $NexusRepoUrl --dry-run --loglevel=error
+        Write-Host "[Dry Run] Would publish $ArchiveTarball to $NexusRepoUrl" -ForegroundColor Cyan
+        Write-Host "[Debug] PackageName: $RealPackage" -ForegroundColor DarkGray
+        Write-Host "[Debug] Tarball: $ArchiveTarball" -ForegroundColor DarkGray
+        Write-Host "[Debug] NexusRepoUrl: $NexusRepoUrl" -ForegroundColor DarkGray
+        Write-Host "[Debug] Command: npm publish $ArchiveTarball --registry $NexusRepoUrl --dry-run --loglevel=error" -ForegroundColor DarkGray
+        $publishOutput = npm publish $ArchiveTarball --registry $NexusRepoUrl --dry-run --loglevel=error 2>&1
         $script:exitCode = $LASTEXITCODE
     }
     else {
         # Actually publish the tarball to Nexus
-        npm publish $ArchiveTarball --registry $NexusRepoUrl --provenance=false --loglevel=error
+        $publishOutput = npm publish $ArchiveTarball --registry $NexusRepoUrl --provenance=false --loglevel=error 2>&1
         $script:exitCode = $LASTEXITCODE
     }
     if ($script:exitCode -ne 0) {
-        Write-Error "[Error] npm publish failed for $RealPackage. Stopping script."
-        exit $script:exitCode
+        $msg = "[Error] npm publish failed for $RealPackage. Output: $publishOutput"
+        Write-Error $msg
+        $script:Errors += $msg
+        return
     }
     else {
-        Write-Host "[Success] $RealPackage published successfully!"
+        Write-Host "[Success] $RealPackage published successfully!" -ForegroundColor Green
     }
 }
 
 # Publish all dependencies with progress counters
 $script:Total = $AllDependencies.Count
 $script:Index = 1
-foreach ($Package in $AllDependencies) {
-    Write-Host ("[Progress] Publishing $($script:Index) of $($script:Total): $Package")
+for ($i = $StartFrom; $i -lt $AllDependencies.Count; $i++) {
+    $Package = $AllDependencies[$i]
+    Write-Host ("[Progress] Publishing $($i+1) of $($script:Total): $Package") -ForegroundColor Magenta
     Publish-Package $Package
-    $script:Index++
 }
 
 # Print completion message
 if ($DryRun) {
-    Write-Host "[Done] Dry run complete. All dependencies simulated for publish to Nexus!"
+    Write-Host "[Done] Dry run complete. All dependencies simulated for publish to Nexus!" -ForegroundColor Cyan
 } else {
-    Write-Host "[Done] All dependencies published to Nexus!"
+    Write-Host "[Done] All dependencies published to Nexus!" -ForegroundColor Green
+}
+
+# Show all errors at the end
+if ($script:Errors.Count -gt 0) {
+    Write-Host "\n===== ERRORS ENCOUNTERED =====" -ForegroundColor Red
+    foreach ($err in $script:Errors) {
+        Write-Host $err -ForegroundColor Red
+    }
+    Write-Host "===== END OF ERRORS =====" -ForegroundColor Red
 }
