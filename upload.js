@@ -19,14 +19,14 @@ function logInfo(message) {
  * @param {string} message
  */
 function logWarn(message) {
-    console.warn(`[WARN ${new Date().toISOString()}] ${message}`);
+    console.log(`[WARN ${new Date().toISOString()}] ${message}`);
 }
 /**
  * Log an error message with timestamp.
  * @param {string} message
  */
 function logError(message) {
-    console.error(`[ERROR ${new Date().toISOString()}] ${message}`);
+    console.log(`[ERROR ${new Date().toISOString()}] ${message}`);
 }
 
 /**
